@@ -1,6 +1,10 @@
+from datetime import date
+
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
 import pandas as pd
+
+from util.quarter import last_n_quarters_label
 
 
 class WeeklyCohorts:
@@ -37,9 +41,15 @@ class WeeklyCohorts:
         'HEAT_PUMP → STOVE': 'tomato'
     }
 
+    QUARTERS_TO_SHOW = 5
+
+    QUARTERS_COLORS = ['steelblue', 'mediumseagreen', 'darkorange', 'tomato', 'purple']
+
     def __init__(self, df: pd.DataFrame):
         self.journey = self.get_journey(df)
         self.switchers = self.get_switchers(self.journey)
+        self.quarters_to_plot = last_n_quarters_label(self.QUARTERS_TO_SHOW, date(2026, 3, 31))
+        self.quarters_colors = dict(zip(self.quarters_to_plot, self.QUARTERS_COLORS))
 
     # Helper: assign week-within-quarter
     @classmethod
@@ -174,7 +184,7 @@ class WeeklyCohorts:
                     fontsize=7.5, color='darkorange', va='top')
 
         plt.tight_layout()
-        plt.savefig('cohort_curves_by_segment.png', dpi=150, bbox_inches='tight')
+        plt.savefig('pipeline_data/cohort_curves_by_segment.png', dpi=150, bbox_inches='tight')
         plt.show()
 
     def plot_weekly_cohorts_performance_trend__switchers(self):
@@ -246,11 +256,10 @@ class WeeklyCohorts:
                     fontsize=7.5, color='darkorange', va='top')
 
         plt.tight_layout()
-        plt.savefig('cohort_curves_top_switchers.png', dpi=150, bbox_inches='tight')
+        plt.savefig('pipeline_data/cohort_curves_top_switchers.png', dpi=150, bbox_inches='tight')
         plt.show()
 
-    def plot_quarters_report(self, quarters_to_plot=('2025 Q1', '2025 Q2', '2025 Q3', '2025 Q4', '2026 Q1')):
-
+    def plot_quarters_report(self):
         # Assign quarter label
         for d in [self.journey, self.switchers]:
             d['quarter_label'] = d['first_quote_date'].dt.year.astype(str) + ' Q' + d[
@@ -260,7 +269,7 @@ class WeeklyCohorts:
         # Diagonal segments
         diag_q = (
             self.journey[
-                self.journey['segment'].isin(self.MAIN_SEGMENTS) & self.journey['quarter_label'].isin(quarters_to_plot)]
+                self.journey['segment'].isin(self.MAIN_SEGMENTS) & self.journey['quarter_label'].isin(self.quarters_to_plot)]
             .groupby(['segment', 'quarter_label'])
             .agg(total=('numero_compte', 'count'),
                  converted=('converted', 'sum'),
@@ -272,7 +281,7 @@ class WeeklyCohorts:
         # Switcher segments
         sw_q = (
             self.switchers[self.switchers['segment'].isin(self.TOP_SWITCHERS) & self.switchers['quarter_label'].isin(
-                quarters_to_plot)]
+                self.quarters_to_plot)]
             .groupby(['segment', 'quarter_label'])
             .agg(total=('numero_compte', 'count'),
                  converted=('converted', 'sum'),
@@ -287,12 +296,12 @@ class WeeklyCohorts:
 
         def plot_quarterly(ax, data, segments, colors, labels, metric, ylabel, title):
             for seg in segments:
-                d = data[data['segment'] == seg].set_index('quarter_label').reindex(quarters_to_plot)
+                d = data[data['segment'] == seg].set_index('quarter_label').reindex(self.quarters_to_plot)
                 color = colors[seg]
                 label = labels[seg]
                 # Shade 2026 Q1 as partial
                 ax.axvspan(3.5, 4.5, alpha=0.08, color='orange')
-                ax.plot(quarters_to_plot, d[metric].values, marker='o', linewidth=2.2,
+                ax.plot(self.quarters_to_plot, d[metric].values, marker='o', linewidth=2.2,
                         markersize=7, color=color, label=label)
                 # Annotate last point
                 val = d[metric].iloc[-1]
@@ -329,13 +338,12 @@ class WeeklyCohorts:
                        'Switchers — Decision Days')
 
         plt.tight_layout()
-        plt.savefig('quarterly_comparison.png', dpi=150, bbox_inches='tight')
+        plt.savefig('pipeline_data/quarterly_comparison.png', dpi=150, bbox_inches='tight')
         plt.show()
 
-    @staticmethod
-    def build_intra_cohorts(df, segments, freq='W', quarters_to_plot=('2025 Q1', '2025 Q2', '2025 Q3', '2025 Q4', '2026 Q1')):
+    def build_intra_cohorts(self, df, segments, freq):
         """Build weekly (stayers) or bi-weekly (switchers) within-quarter cohorts."""
-        filtered = df[df['segment'].isin(segments) & df['quarter_label'].isin(quarters_to_plot)]
+        filtered = df[df['segment'].isin(segments) & df['quarter_label'].isin(self.quarters_to_plot)]
         if freq == 'M':
             filtered = filtered.copy()
             filtered['week_in_q'] = ((filtered['week_in_q'] - 1) // 2) + 1  # bi-weekly buckets
@@ -349,19 +357,7 @@ class WeeklyCohorts:
             .assign(conversion_rate=lambda x: x['converted'] / x['total'] * 100)
         )
 
-    def plot_intra_quarters(self, quarters_to_plot=('2025 Q1', '2025 Q2', '2025 Q3', '2025 Q4', '2026 Q1')):
-        q_colors = {
-            '2025 Q1': 'steelblue',
-            '2025 Q2': 'mediumseagreen',
-            '2025 Q3': 'darkorange',
-            '2025 Q4': 'tomato',
-            '2026 Q1': 'purple'
-        }
-
-        diag_intra = self.build_intra_cohorts(self.journey, self.MAIN_SEGMENTS, freq='W')
-        sw_intra = self.build_intra_cohorts(self.switchers, self.TOP_SWITCHERS, freq='M')
-
-        def plot_intra_quarter(data, segments, labels, title_prefix, freq_label, ncols=2):
+    def plot_intra_quarter(self, data, segments, labels, title_prefix, freq_label, ncols=2):
             nrows = len(segments) // ncols + len(segments) % ncols
             fig, axes = plt.subplots(nrows, ncols, figsize=(16, 4 * nrows), sharey=False)
             fig.suptitle(f'{title_prefix} — Conversion Rate Within Quarter', fontsize=13, fontweight='bold')
@@ -372,7 +368,7 @@ class WeeklyCohorts:
                 d = data[data['segment'] == seg]
                 label = labels[seg]
 
-                for q in quarters_to_plot:
+                for q in self.quarters_to_plot:
                     qd = d[d['quarter_label'] == q].sort_values('week_in_q')
                     if qd.empty:
                         continue
@@ -380,7 +376,7 @@ class WeeklyCohorts:
                     y = qd['conversion_rate'].rolling(2, min_periods=1).mean()
                     ls = '--' if q == '2026 Q1' else '-'
                     ax.plot(qd['week_in_q'], y, marker='o', linewidth=2,
-                            markersize=5, color=q_colors[q], linestyle=ls, label=q)
+                            markersize=5, color=self.quarters_colors[q], linestyle=ls, label=q)
 
                 ax.set_title(label, fontweight='bold', fontsize=10)
                 ax.set_xlabel(f'{freq_label} within quarter')
@@ -396,59 +392,62 @@ class WeeklyCohorts:
             plt.tight_layout()
             return fig
 
+    def plot_intra_quarters(self):
+        diag_intra = self.build_intra_cohorts(self.journey, self.MAIN_SEGMENTS, freq='W')
+        sw_intra = self.build_intra_cohorts(self.switchers, self.TOP_SWITCHERS, freq='M')
+
         # Plot stayers (weekly)
-        fig1 = plot_intra_quarter(
+        fig1 = self.plot_intra_quarter(
             diag_intra, self.MAIN_SEGMENTS, self.MAIN_SEGMENT_LABELS,
             title_prefix='Stayers', freq_label='Week'
         )
-        fig1.savefig('intra_quarter_stayers.png', dpi=150, bbox_inches='tight')
+        fig1.savefig('pipeline_data/intra_quarter_stayers.png', dpi=150, bbox_inches='tight')
 
         # Plot switchers (bi-weekly)
-        fig2 = plot_intra_quarter(
+        fig2 = self.plot_intra_quarter(
             sw_intra, self.TOP_SWITCHERS,
             {s: s.replace('_', ' ') for s in self.TOP_SWITCHERS},
             title_prefix='Switchers', freq_label='Bi-week'
         )
-        fig2.savefig('intra_quarter_switchers.png', dpi=150, bbox_inches='tight')
+        fig2.savefig('pipeline_data/intra_quarter_switchers.png', dpi=150, bbox_inches='tight')
 
         plt.show()
 
-    @staticmethod
-    def plot_quarter_x_product(data, segments, labels, colors, title_prefix, freq_label, ncols=3, quarters_to_plot=('2025 Q1', '2025 Q2', '2025 Q3', '2025 Q4', '2026 Q1')):
-            nrows = len(quarters_to_plot) // ncols + len(quarters_to_plot) % ncols
-            fig, axes = plt.subplots(nrows, ncols, figsize=(18, 4 * nrows), sharey=False)
-            fig.suptitle(f'{title_prefix} — Conversion Rate by Product Within Quarter',
-                         fontsize=13, fontweight='bold')
-            axes = axes.flatten()
+    def plot_quarter_x_product(self, data, segments, labels, colors, title_prefix, freq_label, ncols=3):
+        nrows = len(self.quarters_to_plot) // ncols + len(self.quarters_to_plot) % ncols - 1
+        fig, axes = plt.subplots(nrows, ncols, figsize=(18, 4 * nrows), sharey=False)
+        fig.suptitle(f'{title_prefix} — Conversion Rate by Product Within Quarter',
+                     fontsize=13, fontweight='bold')
+        axes = axes.flatten()
 
-            for i, q in enumerate(quarters_to_plot):
-                ax = axes[i]
-                ls = '--' if q == '2026 Q1' else '-'
+        for i, q in enumerate(self.quarters_to_plot):
+            ax = axes[i]
+            ls = '--' if q == '2026 Q1' else '-'
 
-                for seg in segments:
-                    d = data[(data['segment'] == seg) & (data['quarter_label'] == q)].sort_values('week_in_q')
-                    if d.empty:
-                        continue
-                    y = d['conversion_rate'].rolling(2, min_periods=1).mean()
-                    ax.plot(d['week_in_q'], y, marker='o', linewidth=2,
-                            markersize=5, color=colors[seg], linestyle=ls,
-                            label=labels[seg])
+            for seg in segments:
+                d = data[(data['segment'] == seg) & (data['quarter_label'] == q)].sort_values('week_in_q')
+                if d.empty:
+                    continue
+                y = d['conversion_rate'].rolling(2, min_periods=1).mean()
+                ax.plot(d['week_in_q'], y, marker='o', linewidth=2,
+                        markersize=5, color=colors[seg], linestyle=ls,
+                        label=labels[seg])
 
-                ax.set_title(f'{q}{"  ⚠ partial" if q == "2026 Q1" else ""}',
-                             fontweight='bold', fontsize=10)
-                ax.set_xlabel(f'{freq_label} within quarter')
-                ax.set_ylabel('Conversion Rate')
-                ax.yaxis.set_major_formatter(mtick.PercentFormatter())
-                ax.legend(fontsize=8)
-                ax.grid(True, axis='y', alpha=0.3)
+            ax.set_title(f'{q}{"  ⚠ partial" if q == "2026 Q1" else ""}',
+                         fontweight='bold', fontsize=10)
+            ax.set_xlabel(f'{freq_label} within quarter')
+            ax.set_ylabel('Conversion Rate')
+            ax.yaxis.set_major_formatter(mtick.PercentFormatter())
+            ax.legend(fontsize=8)
+            ax.grid(True, axis='y', alpha=0.3)
 
-            for j in range(i + 1, len(axes)):
-                axes[j].set_visible(False)
+        for j in range(i + 1, len(axes)):
+            axes[j].set_visible(False)
 
-                plt.tight_layout()
-                return fig
+            plt.tight_layout()
+            return fig
 
-    def plot_quarter_x_product_report(self, quarters_to_plot=('2025 Q1', '2025 Q2', '2025 Q3', '2025 Q4', '2026 Q1')):
+    def plot_quarter_x_product_report(self):
         diag_intra = self.build_intra_cohorts(self.journey, self.MAIN_SEGMENTS, freq='W')
         sw_intra = self.build_intra_cohorts(self.switchers, self.TOP_SWITCHERS, freq='M')
 
@@ -457,18 +456,22 @@ class WeeklyCohorts:
             diag_intra, self.MAIN_SEGMENTS, self.MAIN_SEGMENT_LABELS, self.MAIN_SEGMENT_COLORS,
             title_prefix='Stayers', freq_label='Week'
         )
-        fig1.savefig('quarter_x_product_stayers.png', dpi=150, bbox_inches='tight')
+        fig1.savefig('pipeline_data/quarter_x_product_stayers.png', dpi=150, bbox_inches='tight')
 
         # Switchers — bi-weekly
         fig2 = self.plot_quarter_x_product(
             sw_intra, self.TOP_SWITCHERS,
             {s: s.replace('_', ' ') for s in self.TOP_SWITCHERS},
             self.TOP_SWITCHER_COLORS,
-            title_prefix='Switchers', freq_label='Bi-week', quarters_to_plot=quarters_to_plot
+            title_prefix='Switchers', freq_label='Bi-week'
         )
-        fig2.savefig('quarter_x_product_switchers.png', dpi=150, bbox_inches='tight')
+        fig2.savefig('pipeline_data/quarter_x_product_switchers.png', dpi=150, bbox_inches='tight')
 
         plt.show()
+
+
+def get_journey(df: pd.DataFrame):
+    return WeeklyCohorts(df).get_journey(df)
 
 
 def plot_weekly_cohorts_performance_trend__single_quoters(df: pd.DataFrame) -> None:
@@ -483,9 +486,9 @@ def plot_quarters_report(df: pd.DataFrame) -> None:
     WeeklyCohorts(df).plot_quarters_report()
 
 
-def plot_intra_quarters(df: pd.DataFrame, quarters_to_plot=('2025 Q1', '2025 Q2', '2025 Q3', '2025 Q4', '2026 Q1')) -> None:
-    WeeklyCohorts(df).plot_intra_quarters(quarters_to_plot)
+def plot_intra_quarters(df: pd.DataFrame) -> None:
+    WeeklyCohorts(df).plot_intra_quarters()
 
 
-def plot_quarter_x_product_report(df: pd.DataFrame, quarters_to_plot=('2025 Q1', '2025 Q2', '2025 Q3', '2025 Q4', '2026 Q1')) -> None:
-    WeeklyCohorts(df).plot_quarter_x_product_report(quarters_to_plot)
+def plot_quarter_x_product_report(df: pd.DataFrame) -> None:
+    WeeklyCohorts(df).plot_quarter_x_product_report()
