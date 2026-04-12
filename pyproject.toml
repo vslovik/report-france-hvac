@@ -1,0 +1,49 @@
+[tool.poetry]
+name = "direct-marketing-japan"
+version = "0.1.0"
+description = ""
+authors = ["Slovikovskaya <vslovik@gmail.com>"]
+readme = "README.md"
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.11"
+feature-engine = "^1.8.3"
+scikit-learn = "^1.6.1"
+numpy = "^2.2.5"
+matplotlib = "^3.10.3"
+seaborn = "^0.13.2"
+optbinning = "^0.20.1"
+category-encoders = "^2.8.1"
+xgboost = "^3.0.2"
+imbalanced-learn = "^0.13.0"
+pdfplumber = "^0.11.6"
+shap = "^0.48.0"
+joblib = "^1.5.2"
+minisom = "^2.3.5"
+polars = "^1.35.2"
+urllib3 = "^2.5.0"
+googletrans = "^4.0.2"
+catboost = "^1.2.8"
+geopandas = "^1.1.1"
+rapidfuzz = "^3.14.3"
+thefuzz = "^0.22.1"
+python-levenshtein = "^0.27.3"
+swifter = "^1.4.0"
+pytest = "^9.0.1"
+duckdb = "^1.4.3"
+wandb = "^0.24.0"
+jupyterlab = "^4.5.2"
+ipykernel = "^7.1.0"
+plotly = "^6.5.2"
+numba = "^0.63.1"
+ipynbname = "^2025.8.0.0"
+notebook-as-pdf = "^0.5.0"
+chardet = "^7.2.0"
+
+[tool.poetry.group.dev.dependencies]
+notebook = "^7.4.2"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
