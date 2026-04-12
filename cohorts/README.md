@@ -88,4 +88,48 @@ This kind of chart is useful for **business people, product managers, or marketi
 
 > The code takes our customer quote and purchase data, groups people by the week they first contacted sales team, calculates 
 > how well each of the four main products is converting and how fast people are buying, smooths out the noise, separates
-> old reliable data from very recent data, and draws two clean, professional line charts (one for conversion %, one for
+> old reliable data from very recent data, and draws two line charts (one for conversion %, one for
+
+### Clarification: What Is Actually Being Plotted?
+
+Week cohort time series "disappears after one week" (meaning everyone converts or drops out within 7 days). 
+Then plotting a time series across weeks for each cohort doesn't make sense. 
+The cohort would just be a single dot.
+
+**So what is being plotted?**
+
+The code is actually plotting different cohorts **side-by-side over calendar time** — not following one cohort over 
+its lifetime.
+
+#### Example
+
+    Cohort from Jan 1: 25% conversion rate → plotted at Jan 1
+    Cohort from Jan 8: 22% conversion rate → plotted at Jan 8
+    Cohort from Jan 15: 18% conversion rate → plotted at Jan 15
+    Cohort from Jan 22: 20% conversion rate → plotted at Jan 22
+
+Then the rolling average connects these different cohorts to show:
+
+> *"Is the conversion rate for new cohorts getting better or worse over time?"*
+
+#### Let us think of it this way:
+
+| Axis | Represents |
+|------|------------|
+| **X-axis** | Calendar time (when the cohort started) |
+| **Y-axis** | That cohort's "final" conversion rate (after their 1-week lifespan) |
+| **Line** | How new cohorts are performing compared to older cohorts |
+
+#### This is actually a "cohort trend chart" — not a "cohort survival curve"
+
+- January cohorts: 25% conversion
+- February cohorts: 22% conversion
+- March cohorts: 18% conversion ← Getting worse!
+
+#### Why the rolling average helps
+
+Smoothing out week-to-week randomness to answer: *"Is the business truly declining, or is it just random noise?"*
+
+#### Summary
+
+We are comparing **many different cohorts across time**, not tracking one cohort through time.
