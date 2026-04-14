@@ -53,6 +53,14 @@ class WeeklyCohorts:
     ]
 
     MAX_WEEKS = 24
+    MIN_CUSTOMERS = 50  # minimum per agency×product to plot
+
+    DIAGONAL_MAP = {
+        'Boiler': 'BOILER_GAS → BOILER_GAS',
+        'Stove': 'STOVE → STOVE',
+        'AC': 'AIR_CONDITIONER → AIR_CONDITIONER',
+        'HP': 'HEAT_PUMP → HEAT_PUMP'
+    }
 
     def __init__(self, df: pd.DataFrame):
         self.journey = self.get_journey(df)
@@ -1038,19 +1046,10 @@ class WeeklyCohorts:
         plt.show()
 
     def plot_monthly_cohort_conversion_curves_by_agency(self):
-        diag_map = {
-            'Boiler': 'BOILER_GAS → BOILER_GAS',
-            'Stove': 'STOVE → STOVE',
-            'AC': 'AIR_CONDITIONER → AIR_CONDITIONER',
-            'HP': 'HEAT_PUMP → HEAT_PUMP'
-        }
-
-        agencies = sorted(self.journey_agency['main_agency'].dropna().unique())
-        MIN_CUSTOMERS = 50  # minimum per agency×product to plot
 
         year_colors = {2024: 'steelblue', 2025: 'tomato', 2026: 'mediumseagreen'}
 
-        for product, seg in diag_map.items():
+        for product, seg in self.DIAGONAL_MAP.items():
             # Filter to this product's diagonal segment
             prod_df = self.journey_agency[
                 (self.journey_agency['segment'] == seg) &
@@ -1059,7 +1058,7 @@ class WeeklyCohorts:
 
             # Which agencies have enough data?
             agency_counts = prod_df['main_agency'].value_counts()
-            valid_agencies = agency_counts[agency_counts >= MIN_CUSTOMERS].index.tolist()
+            valid_agencies = agency_counts[agency_counts >= self.MIN_CUSTOMERS].index.tolist()
             valid_agencies = sorted(valid_agencies)
 
             n = len(valid_agencies)
@@ -1139,30 +1138,22 @@ class WeeklyCohorts:
             print(f"Saved: cohort_curves_agency_{fname}.png — {len(valid_agencies)} agencies plotted")
 
     def plot_monthly_cohort_conversion_curves_by_agency_process(self):
-        MIN_CUSTOMERS = 50
-        diag_map = {
-            'Boiler': 'BOILER_GAS → BOILER_GAS',
-            'Stove': 'STOVE → STOVE',
-            'AC': 'AIR_CONDITIONER → AIR_CONDITIONER',
-            'HP': 'HEAT_PUMP → HEAT_PUMP'
-        }
 
-        # ── Add process flag to journey_agency ───────────────────────────────────────
+        # Add process flag to journey_agency
         # Get dominant process flag per customer (max = if any quote was new process)
 
         # Process labels
         proc_labels = {0: 'Old process', 1: 'New process (TechEasy)'}
         proc_colors = {0: 'steelblue', 1: 'tomato'}
-        proc_ls = {0: '-', 1: '-'}
 
-        for product, seg in diag_map.items():
+        for product, seg in self.DIAGONAL_MAP.items():
             prod_df = self.journey_agency_process[
                 (self.journey_agency_process['segment'] == seg) &
                 (self.journey_agency_process['cohort_month'] >= pd.Period('2024-01', 'M'))
                 ]
 
             agency_counts = prod_df['main_agency'].value_counts()
-            valid_agencies = sorted(agency_counts[agency_counts >= MIN_CUSTOMERS].index.tolist())
+            valid_agencies = sorted(agency_counts[agency_counts >= self.MIN_CUSTOMERS].index.tolist())
 
             n = len(valid_agencies)
             ncols = 4
