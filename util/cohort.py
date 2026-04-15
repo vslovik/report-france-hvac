@@ -57,7 +57,7 @@ def get_cohort_conversion_curves(df: pd.DataFrame, max_weeks: int, end_month: st
     for month in months:
         grp = df[df['cohort_month'] == month]
         total = len(grp)
-        if total < 5:
+        if total < 5:  # skip tiny monthly cohorts
             continue
 
         converted = grp[grp['converted'] == 1]
@@ -70,3 +70,26 @@ def get_cohort_conversion_curves(df: pd.DataFrame, max_weeks: int, end_month: st
         month_curves.append(curve)
 
     return month_curves
+
+
+"""
+
+                    month_curves = []
+
+                    for month in year_months:
+                        grp = year_df[year_df['cohort_month'] == month]
+                        total = len(grp)
+                        if total < 5:  # skip tiny monthly cohorts
+                            continue
+                        converted = grp[grp['converted'] == 1]
+                        months_since = (pd.Period(self.end_month, 'M') - month).n
+                        max_w = min(self.max_weeks, months_since * 4)
+                        curve = []
+                        for w in range(max_w + 1):
+                            curve.append((converted['conv_week'] <= w).sum() / total * 100)
+                        month_curves.append(curve)
+
+                    if not month_curves:
+                        continue
+
+"""

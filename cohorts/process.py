@@ -9,6 +9,88 @@ from util.plot import plot_median_band
 
 
 class AgencyProcessCohorts(AgencyCohorts):
+    MIN_CUSTOMERS = 50  # minimum per agency×product to plot
+
+    def __init__(self, df: pd.DataFrame, max_weeks=24, start_month='2024-01', end_month='2026-03'):
+        super().__init__(df)
+
+        self.max_weeks = max_weeks
+        self.start_month = start_month
+        self.end_month = end_month
+
+        self.journey = self.get_journey(df)
+        self.new_process = df.groupby('nom_agence').agg(
+            first_new_process=('dt_creation_devis',
+                               lambda x: x[df.loc[x.index, 'fg_nouveau_process_relance_devis'] == 1].min()),
+        ).reset_index()
+
+    @classmethod
+    def get_journey(cls, df: pd.DataFrame) -> pd.DataFrame:
+        journey_agency = super().get_journey(df)
+
+        # Add process flag to journey_agency
+        # Get dominant process flag per customer (max = if any quote was new process)
+        process_per_customer = (
+            df.groupby('numero_compte')['fg_nouveau_process_relance_devis']
+            .max()
+            .reset_index()
+            .rename(columns={'fg_nouveau_process_relance_devis': 'new_process'})
+        )
+        journey_agency_process = journey_agency.merge(process_per_customer, on='numero_compte', how='left')
+
+        return journey_agency_process
+
+    def get_agency(self, ax, agency_df, agency, new_process_adoption_month):
+        return self.AgencyPlot(
+            ax,
+            agency_df,
+            agency,
+            new_process_adoption_month,
+            self.max_weeks,
+            self.start_month,
+            self.end_month
+        )
+
+    def plot(self):
+        for seg, product in self.MAIN_SEGMENT_LABELS.items():
+            prod_df = self.journey[
+                (self.journey['segment'] == seg) &
+                (self.journey['cohort_month'] >= pd.Period(self.start_month, 'M'))
+                ]
+
+            agency_counts = prod_df['main_agency'].value_counts()
+            valid_agencies = sorted(agency_counts[agency_counts >= self.MIN_CUSTOMERS].index.tolist())
+
+            n = len(valid_agencies)
+            ncols = 4
+            nrows = int(np.ceil(n / ncols))
+
+            fig, axes = plt.subplots(nrows, ncols, figsize=(20, 5 * nrows), sharey=True)
+            fig.suptitle(f'Cohort Conversion Curves by Agency — {product}\nOld Process vs TechEasy (New Process)',
+                         fontsize=13, fontweight='bold')
+
+            axes = axes.flatten()
+            for i, agency in enumerate(valid_agencies):
+                ax = axes[i]
+                agency_df = prod_df[prod_df['main_agency'] == agency]
+                new_process_adoption_month = \
+                self.new_process[self.new_process['nom_agence'] == agency]['first_new_process'].values[0]
+                self.get_agency(ax, agency_df, agency, new_process_adoption_month).plot()
+
+            for j in range(i + 1, len(axes)):
+                axes[j].set_visible(False)
+            for r in range(nrows):
+                axes[r * ncols].set_ylabel('Cumulative % converted', fontsize=9)
+
+            axes[-nrows * ncols + nrows * ncols - ncols].set_xlabel('Weeks from first quote', fontsize=9)
+            plt.tight_layout()
+
+            fname = product.lower().replace(' ', '_')
+            plt.savefig(f'{self.OUTPUT_DIR}/cohort_curves_agency_{fname}_process.png', dpi=150, bbox_inches='tight')
+            print(f"Saved: {self.OUTPUT_DIR}/cohort_curves_agency_{fname}_process.png")
+
+            plt.show()
+
     class AgencyPlot:
 
         def __init__(self, ax, df, agency_name: str, new_process_adoption_month: int, max_weeks: int, start_month: str, end_month: str):
@@ -86,86 +168,6 @@ class AgencyProcessCohorts(AgencyCohorts):
             self.ax.grid(True, alpha=0.3)
             self.ax.legend(fontsize=7, loc='lower right')
 
-    MAX_WEEKS = 24
-    MIN_CUSTOMERS = 50  # minimum per agency×product to plot
-    START_MONTH = '2024-01'
-    END_MONTH = '2026-03'
-    OUTPUT_DIR = "pipeline_data"
 
-    def __init__(self, df: pd.DataFrame):
-        super().__init__(df)
-        self.journey = self.get_journey(df)
-        self.new_process = df.groupby('nom_agence').agg(
-            first_new_process=('dt_creation_devis',
-                               lambda x: x[df.loc[x.index, 'fg_nouveau_process_relance_devis'] == 1].min()),
-        ).reset_index()
-
-    @classmethod
-    def get_journey(cls, df: pd.DataFrame) -> pd.DataFrame:
-        journey_agency = super().get_journey(df)
-
-        # Add process flag to journey_agency
-        # Get dominant process flag per customer (max = if any quote was new process)
-        process_per_customer = (
-            df.groupby('numero_compte')['fg_nouveau_process_relance_devis']
-            .max()
-            .reset_index()
-            .rename(columns={'fg_nouveau_process_relance_devis': 'new_process'})
-        )
-        journey_agency_process = journey_agency.merge(process_per_customer, on='numero_compte', how='left')
-        return journey_agency_process
-
-    def get_agency(self, ax, agency_df, agency, new_process_adoption_month):
-        return self.AgencyPlot(
-            ax,
-            agency_df,
-            agency,
-            new_process_adoption_month,
-            self.MAX_WEEKS,
-            self.START_MONTH,
-            self.END_MONTH
-        )
-
-    def plot(self):
-        for seg, product in self.MAIN_SEGMENT_LABELS.items():
-            prod_df = self.journey[
-                (self.journey['segment'] == seg) &
-                (self.journey['cohort_month'] >= pd.Period(self.START_MONTH, 'M'))
-                ]
-
-            agency_counts = prod_df['main_agency'].value_counts()
-            valid_agencies = sorted(agency_counts[agency_counts >= self.MIN_CUSTOMERS].index.tolist())
-
-            n = len(valid_agencies)
-            ncols = 4
-            nrows = int(np.ceil(n / ncols))
-
-            fig, axes = plt.subplots(nrows, ncols, figsize=(20, 5 * nrows), sharey=True)
-            fig.suptitle(f'Cohort Conversion Curves by Agency — {product}\nOld Process vs TechEasy (New Process)',
-                         fontsize=13, fontweight='bold')
-
-            axes = axes.flatten()
-            for i, agency in enumerate(valid_agencies):
-                ax = axes[i]
-                agency_df = prod_df[prod_df['main_agency'] == agency]
-                new_process_adoption_month = \
-                self.new_process[self.new_process['nom_agence'] == agency]['first_new_process'].values[0]
-                self.get_agency(ax, agency_df, agency, new_process_adoption_month).plot()
-
-            for j in range(i + 1, len(axes)):
-                axes[j].set_visible(False)
-            for r in range(nrows):
-                axes[r * ncols].set_ylabel('Cumulative % converted', fontsize=9)
-
-            axes[-nrows * ncols + nrows * ncols - ncols].set_xlabel('Weeks from first quote', fontsize=9)
-            plt.tight_layout()
-
-            fname = product.lower().replace(' ', '_')
-            plt.savefig(f'cohort_curves_agency_{fname}_process.png', dpi=150, bbox_inches='tight')
-            print(f"Saved: cohort_curves_agency_{fname}_process.png")
-
-            plt.show()
-
-
-def plot_process_cohorts(df: pd.DataFrame) -> None:
+def plot_agency_process_cohorts(df: pd.DataFrame) -> None:
     AgencyProcessCohorts(df).plot()
