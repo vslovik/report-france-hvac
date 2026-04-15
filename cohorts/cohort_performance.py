@@ -13,6 +13,13 @@ class WeeklyCohorts:
     MAIN_SEGMENTS = ['BOILER_GAS → BOILER_GAS', 'STOVE → STOVE',
                      'AIR_CONDITIONER → AIR_CONDITIONER', 'HEAT_PUMP → HEAT_PUMP']
 
+    MAIN_SEGMENT_MAP = {
+        'BOILER_GAS': 'Boiler',
+        'STOVE': 'Stove',
+        'AIR_CONDITIONER': 'AC',
+        'HEAT_PUMP': 'Heat Pump'
+    }
+
     MAIN_SEGMENT_LABELS = {
         'BOILER_GAS → BOILER_GAS': 'Boiler',
         'STOVE → STOVE': 'Stove',
@@ -61,6 +68,19 @@ class WeeklyCohorts:
         'AC': 'AIR_CONDITIONER → AIR_CONDITIONER',
         'HP': 'HEAT_PUMP → HEAT_PUMP'
     }
+
+    SEGMENT_LABELS = {
+        'BOILER_GAS → BOILER_GAS': 'Boiler → Boiler',
+        'STOVE → STOVE': 'Stove → Stove',
+        'AIR_CONDITIONER → AIR_CONDITIONER': 'AC → AC',
+        'HEAT_PUMP → HEAT_PUMP': 'Heat Pump → Heat Pump',
+        'HEAT_PUMP → OTHER': 'Heat Pump → Other',
+        'OTHER → HEAT_PUMP': 'Other → Heat Pump',
+        'BOILER_GAS → HEAT_PUMP': 'Boiler → Heat Pump',
+        'HEAT_PUMP → STOVE': 'Heat Pump → Stove',
+    }
+
+    OUTPUT_DIR = "pipeline_data"
 
     def __init__(self, df: pd.DataFrame):
         self.journey = self.get_journey(df)
@@ -299,7 +319,7 @@ class WeeklyCohorts:
                     fontsize=7.5, color='darkorange', va='top')
 
         plt.tight_layout()
-        plt.savefig('pipeline_data/cohort_curves_by_segment.png', dpi=150, bbox_inches='tight')
+        plt.savefig(f'{self.OUTPUT_DIR}/cohort_curves_by_segment.png', dpi=150, bbox_inches='tight')
         plt.show()
 
     def plot_weekly_cohorts_performance_trend__switchers(self):
@@ -371,7 +391,7 @@ class WeeklyCohorts:
                     fontsize=7.5, color='darkorange', va='top')
 
         plt.tight_layout()
-        plt.savefig('pipeline_data/cohort_curves_top_switchers.png', dpi=150, bbox_inches='tight')
+        plt.savefig(f'{self.OUTPUT_DIR}/cohort_curves_top_switchers.png', dpi=150, bbox_inches='tight')
         plt.show()
 
     def plot_quarters_report(self):
@@ -453,7 +473,7 @@ class WeeklyCohorts:
                        'Switchers — Decision Days')
 
         plt.tight_layout()
-        plt.savefig('pipeline_data/quarterly_comparison.png', dpi=150, bbox_inches='tight')
+        plt.savefig(f'{self.OUTPUT_DIR}/quarterly_comparison.png', dpi=150, bbox_inches='tight')
         plt.show()
 
     def build_intra_cohorts(self, df, segments, freq):
@@ -516,7 +536,7 @@ class WeeklyCohorts:
             diag_intra, self.MAIN_SEGMENTS, self.MAIN_SEGMENT_LABELS,
             title_prefix='Stayers', freq_label='Week'
         )
-        fig1.savefig('pipeline_data/intra_quarter_stayers.png', dpi=150, bbox_inches='tight')
+        fig1.savefig(f'{self.OUTPUT_DIR}/intra_quarter_stayers.png', dpi=150, bbox_inches='tight')
 
         # Plot switchers (bi-weekly)
         fig2 = self.plot_intra_quarter(
@@ -524,7 +544,7 @@ class WeeklyCohorts:
             {s: s.replace('_', ' ') for s in self.TOP_SWITCHERS},
             title_prefix='Switchers', freq_label='Bi-week'
         )
-        fig2.savefig('pipeline_data/intra_quarter_switchers.png', dpi=150, bbox_inches='tight')
+        fig2.savefig(f'{self.OUTPUT_DIR}/intra_quarter_switchers.png', dpi=150, bbox_inches='tight')
 
         plt.show()
 
@@ -571,7 +591,7 @@ class WeeklyCohorts:
             diag_intra, self.MAIN_SEGMENTS, self.MAIN_SEGMENT_LABELS, self.MAIN_SEGMENT_COLORS,
             title_prefix='Stayers', freq_label='Week'
         )
-        fig1.savefig('pipeline_data/quarter_x_product_stayers.png', dpi=150, bbox_inches='tight')
+        fig1.savefig(f'{self.OUTPUT_DIR}/quarter_x_product_stayers.png', dpi=150, bbox_inches='tight')
 
         # Switchers — bi-weekly
         fig2 = self.plot_quarter_x_product(
@@ -580,7 +600,7 @@ class WeeklyCohorts:
             self.TOP_SWITCHER_COLORS,
             title_prefix='Switchers', freq_label='Bi-week'
         )
-        fig2.savefig('pipeline_data/quarter_x_product_switchers.png', dpi=150, bbox_inches='tight')
+        fig2.savefig(f'{self.OUTPUT_DIR}/quarter_x_product_switchers.png', dpi=150, bbox_inches='tight')
 
         plt.show()
 
@@ -662,7 +682,7 @@ class WeeklyCohorts:
                 transform=ax.transAxes, fontsize=8, color='grey', va='top')
 
         plt.tight_layout()
-        plt.savefig('pipeline_data/monthly_cohort_conversion_curves.png', dpi=150, bbox_inches='tight')
+        plt.savefig(f'{self.OUTPUT_DIR}/monthly_cohort_conversion_curves.png', dpi=150, bbox_inches='tight')
         plt.show()
 
         fig, axes = plt.subplots(3, 1, figsize=(16, 18), sharey=True)
@@ -703,152 +723,16 @@ class WeeklyCohorts:
                       transform=axes[-1].transAxes, fontsize=8, color='grey')
 
         plt.tight_layout()
-        plt.savefig('pipeline_data/monthly_cohort_curves_by_year.png', dpi=150, bbox_inches='tight')
+        plt.savefig(f'{self.OUTPUT_DIR}/monthly_cohort_curves_by_year.png', dpi=150, bbox_inches='tight')
         plt.show()
 
     def plot_monthly_cohort_conversion_curves_by_product(self):
-        # ToDo
-        cutoff_month = pd.Period('2025-12', 'M')
-        products = ['Boiler', 'Stove', 'AC', 'Heat Pump']
-        years = [2024, 2025, 2026]
 
-        prod_colors = {'Boiler': 'steelblue', 'Stove': 'tomato',
-                       'AC': 'mediumseagreen', 'Heat Pump': 'darkorange'}
-
-        # Build curves per product × cohort month
-        cohorts_prod = self.journey[
-            (self.journey['cohort_month'] >= pd.Period('2024-01', 'M')) &
-            (self.journey['product'].notna())
-            ].copy()
-        cohorts_prod['conv_week'] = np.where(
-            cohorts_prod['decision_days'] == 0,
-            0,
-            np.ceil(cohorts_prod['decision_days'] / 7).astype(int)
-        )
-
-        curves_prod = []
-        for (month, product), grp in cohorts_prod.groupby(['cohort_month', 'product']):
-            total = len(grp)
-            converted = grp[grp['converted'] == 1]
-            for w in range(self.MAX_WEEKS + 1):
-                cum_conv = (converted['conv_week'] <= w).sum()
-                curves_prod.append({
-                    'cohort': str(month),
-                    'product': product,
-                    'year': month.year,
-                    'week': w,
-                    'cumulative_pct': cum_conv / total * 100,
-                    'total': total
-                })
-
-        curves_prod_df = pd.DataFrame(curves_prod)
-
-        def get_curve(df, month, product):
-            """Trim curve to available weeks."""
-            d = df[(df['cohort'] == str(month)) & (df['product'] == product)]
-            months_since = (pd.Period('2026-03', 'M') - month).n
-            max_w = min(self.MAX_WEEKS, months_since * 4)
-            return d[d['week'] <= max_w]
-
-        all_months = sorted(cohorts_prod['cohort_month'].unique())
-        print(f"Cohorts: {len(all_months)}  ({all_months[0]} → {all_months[-1]})")
-
-        # Option A: one figure per product, 3 year panels
-        for product in products:
-            fig, axes = plt.subplots(3, 1, figsize=(16, 15), sharey=True)
-            fig.suptitle(f'Cohort Conversion Curves — {product}',
-                         fontsize=13, fontweight='bold')
-
-            for ax, year in zip(axes, years):
-                year_months = [m for m in all_months if m.year == year]
-                cmap_year = plt.cm.get_cmap('turbo', max(len(year_months), 1))
-
-                for i, month in enumerate(year_months):
-                    d = get_curve(curves_prod_df, month, product)
-                    if d.empty:
-                        continue
-                    ls = '--' if month > cutoff_month else '-'
-                    alpha = 0.6 if month > cutoff_month else 0.9
-                    color = cmap_year(i / max(len(year_months) - 1, 1))
-
-                    ax.plot(d['week'], d['cumulative_pct'],
-                            color=color, linewidth=2, linestyle=ls,
-                            alpha=alpha, label=str(month))
-
-                ax.set_title(f'{year}  —  {len(year_months)} cohorts',
-                             fontweight='bold', fontsize=10, loc='left')
-                ax.set_ylabel('Cumulative % converted', fontsize=9)
-                ax.yaxis.set_major_formatter(mtick.PercentFormatter())
-                ax.set_xlim(0, self.MAX_WEEKS)
-                ax.set_ylim(0, 80)
-                ax.set_xticks(range(0, self.MAX_WEEKS + 1, 2))
-                ax.grid(True, alpha=0.3)
-                ax.legend(fontsize=8, ncol=len(year_months), loc='lower right')
-
-            axes[-1].set_xlabel('Weeks from first quote', fontsize=10)
-            plt.tight_layout()
-            plt.savefig(f'pipeline_data/monthly_cohort_curves_{product.lower().replace(" ", "_")}.png',
-                        dpi=150, bbox_inches='tight')
-            plt.show()
-
-        # Option B: 4 products × 3 years grid
-        fig, axes = plt.subplots(3, 4, figsize=(24, 15), sharey=True, sharex=True)
-        fig.suptitle('Cohort Conversion Curves — All Products × All Years',
-                     fontsize=14, fontweight='bold')
-
-        for col, product in enumerate(products):
-            for row, year in enumerate(years):
-                ax = axes[row, col]
-                year_months = [m for m in all_months if m.year == year]
-                cmap_year = plt.cm.get_cmap('turbo', max(len(year_months), 1))
-
-                for i, month in enumerate(year_months):
-                    d = get_curve(curves_prod_df, month, product)
-                    if d.empty:
-                        continue
-                    ls = '--' if month > cutoff_month else '-'
-                    alpha = 0.6 if month > cutoff_month else 0.9
-                    color = cmap_year(i / max(len(year_months) - 1, 1))
-
-                    ax.plot(d['week'], d['cumulative_pct'],
-                            color=color, linewidth=1.5, linestyle=ls, alpha=alpha)
-
-                if row == 0:
-                    ax.set_title(product, fontweight='bold', fontsize=11,
-                                 color=prod_colors[product])
-                if col == 0:
-                    ax.set_ylabel(f'{year}\nCumulative % converted', fontsize=9)
-
-                ax.yaxis.set_major_formatter(mtick.PercentFormatter())
-                ax.set_xlim(0, self.MAX_WEEKS)
-                ax.set_ylim(0, 80)
-                ax.set_xticks(range(0, self.MAX_WEEKS + 1, 4))
-                ax.grid(True, alpha=0.3)
-
-        for col in range(4):
-            axes[-1, col].set_xlabel('Weeks from first quote', fontsize=9)
-
-        plt.tight_layout()
-        plt.savefig('pipeline_data/monthly_cohort_curves_grid.png', dpi=150, bbox_inches='tight')
-        plt.show()
-
-    def plot_monthly_cohort_conversion_curves_by_product_strict(self):
-        #ToDo
         cutoff_month = pd.Period('2025-12', 'M')
         years = [2024, 2025, 2026]
-
-        top_switchers = [
-            'HEAT_PUMP → OTHER',
-            'OTHER → HEAT_PUMP',
-            'BOILER_GAS → HEAT_PUMP',
-            'HEAT_PUMP → STOVE'
-        ]
-
-        main_segments = ['BOILER_GAS → BOILER_GAS', 'STOVE → STOVE',
-                         'AIR_CONDITIONER → AIR_CONDITIONER', 'HEAT_PUMP → HEAT_PUMP']
 
         # Build curves per segment × cohort month
-        segments_to_plot = main_segments + top_switchers
+        segments_to_plot = self.MAIN_SEGMENTS + self.TOP_SWITCHERS
 
         cohorts_seg = self.journey[
             (self.journey['cohort_month'] >= pd.Period('2024-01', 'M')) &
@@ -880,21 +764,12 @@ class WeeklyCohorts:
 
         curves_seg_df = pd.DataFrame(curves_seg)
 
-        seg_labels = {
-            'BOILER_GAS → BOILER_GAS': 'Boiler → Boiler',
-            'STOVE → STOVE': 'Stove → Stove',
-            'AIR_CONDITIONER → AIR_CONDITIONER': 'AC → AC',
-            'HEAT_PUMP → HEAT_PUMP': 'Heat Pump → Heat Pump',
-            'HEAT_PUMP → OTHER': 'Heat Pump → Other',
-            'OTHER → HEAT_PUMP': 'Other → Heat Pump',
-            'BOILER_GAS → HEAT_PUMP': 'Boiler → Heat Pump',
-            'HEAT_PUMP → STOVE': 'Heat Pump → Stove',
-        }
+
 
         # One figure per segment, 3 year panels
         for seg in segments_to_plot:
             fig, axes = plt.subplots(3, 1, figsize=(16, 15), sharey=True)
-            fig.suptitle(f'Cohort Conversion Curves — {seg_labels[seg]}',
+            fig.suptitle(f'Cohort Conversion Curves — {self.SEGMENT_LABELS[seg]}',
                          fontsize=13, fontweight='bold')
 
             for ax, year in zip(axes, years):
@@ -932,18 +807,10 @@ class WeeklyCohorts:
             axes[-1].set_xlabel('Weeks from first quote', fontsize=10)
             plt.tight_layout()
             fname = seg.lower().replace(' ', '_').replace('→', 'to').replace('__', '_')
-            plt.savefig(f'pipeline_data/monthly_cohort_curves_{fname}_strict.png', dpi=150, bbox_inches='tight')
+            plt.savefig(f'{self.OUTPUT_DIR}/monthly_cohort_curves_{fname}_strict.png', dpi=150, bbox_inches='tight')
             plt.show()
 
-        # Reuse curves_seg_df already built — just filter to diagonal segments
-        diag_seg_labels = {
-            'BOILER_GAS → BOILER_GAS': 'Boiler',
-            'STOVE → STOVE': 'Stove',
-            'AIR_CONDITIONER → AIR_CONDITIONER': 'AC',
-            'HEAT_PUMP → HEAT_PUMP': 'Heat Pump'
-        }
-
-        for seg, label in diag_seg_labels.items():
+        for seg, label in self.MAIN_SEGMENT_LABELS.items():
             fig, axes = plt.subplots(3, 1, figsize=(16, 15), sharey=True)
             fig.suptitle(f'Cohort Conversion Curves — {label} (strict: {seg})',
                          fontsize=13, fontweight='bold')
@@ -983,27 +850,14 @@ class WeeklyCohorts:
             axes[-1].set_xlabel('Weeks from first quote', fontsize=10)
             plt.tight_layout()
             fname = label.lower().replace(' ', '_')
-            plt.savefig(f'pipeline_data/monthly_cohort_curves_{fname}_strict.png', dpi=150, bbox_inches='tight')
+            plt.savefig(f'{self.OUTPUT_DIR}/monthly_cohort_curves_{fname}_strict.png', dpi=150, bbox_inches='tight')
             plt.show()
-
-        diag_colors = {
-            'BOILER_GAS → BOILER_GAS': 'steelblue',
-            'STOVE → STOVE': 'tomato',
-            'AIR_CONDITIONER → AIR_CONDITIONER': 'mediumseagreen',
-            'HEAT_PUMP → HEAT_PUMP': 'darkorange'
-        }
-        diag_labels = {
-            'BOILER_GAS → BOILER_GAS': 'Boiler',
-            'STOVE → STOVE': 'Stove',
-            'AIR_CONDITIONER → AIR_CONDITIONER': 'AC',
-            'HEAT_PUMP → HEAT_PUMP': 'Heat Pump'
-        }
 
         fig, axes = plt.subplots(3, 4, figsize=(24, 15), sharey=True, sharex=True)
         fig.suptitle('Cohort Conversion Curves — All Products × All Years (strict: first = last product)',
                      fontsize=14, fontweight='bold')
 
-        for col, (seg, label) in enumerate(diag_seg_labels.items()):
+        for col, (seg, label) in enumerate(self.MAIN_SEGMENT_LABELS.items()):
             for row, year in enumerate(years):
                 ax = axes[row, col]
                 year_months = [m for m in all_months if m.year == year]
@@ -1028,7 +882,7 @@ class WeeklyCohorts:
 
                 if row == 0:
                     ax.set_title(label, fontweight='bold', fontsize=11,
-                                 color=list(diag_colors.values())[col])
+                                 color=list(self.MAIN_SEGMENT_COLORS.values())[col])
                 if col == 0:
                     ax.set_ylabel(f'{year}\nCumulative % converted', fontsize=9)
 
@@ -1042,7 +896,7 @@ class WeeklyCohorts:
             axes[-1, col].set_xlabel('Weeks from first quote', fontsize=9)
 
         plt.tight_layout()
-        plt.savefig('pipeline_data/cohort_curves_grid_strict.png', dpi=150, bbox_inches='tight')
+        plt.savefig(f'{self.OUTPUT_DIR}/cohort_curves_grid_strict.png', dpi=150, bbox_inches='tight')
         plt.show()
 
     def plot_monthly_cohort_conversion_curves_by_agency(self):
