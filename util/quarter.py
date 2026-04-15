@@ -1,5 +1,7 @@
 from datetime import date
 
+import pandas as pd
+
 
 def last_n_quarters(n: int, at_date = None) -> list[str]:
     """Returns a list of the last N quarters in 'YYYY MM' format."""
@@ -42,3 +44,8 @@ def last_n_quarters_label(n: int, at_date = None) -> list[str]:
 def mm_to_quarter_label(quarters: list[str]) -> list[str]:
     """Converts 'YYYY MM' quarter strings to 'YYYY QQ' format."""
     return [f"{y} Q{(int(m) - 1) // 3 + 1}" for y, m in (q.split() for q in quarters)]
+
+
+def week_in_quarter(date_series):
+    quarter_start = date_series.dt.to_period('Q').dt.start_time
+    return ((date_series - quarter_start) / pd.Timedelta(weeks=1)).astype(int) + 1
