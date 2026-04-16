@@ -12,13 +12,7 @@ class AgencyProcessCohorts(AgencyCohorts):
     MIN_CUSTOMERS = 50  # minimum per agency×product to plot
 
     def __init__(self, df: pd.DataFrame, max_weeks=24, start_month='2024-01', end_month='2026-03'):
-        super().__init__(df)
-
-        self.max_weeks = max_weeks
-        self.start_month = start_month
-        self.end_month = end_month
-
-        self.journey = self.get_journey(df)
+        super().__init__(df, max_weeks, start_month, end_month)
         self.new_process = df.groupby('nom_agence').agg(
             first_new_process=('dt_creation_devis',
                                lambda x: x[df.loc[x.index, 'fg_nouveau_process_relance_devis'] == 1].min()),

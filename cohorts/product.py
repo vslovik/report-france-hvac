@@ -1,10 +1,8 @@
-from datetime import date
-
 import numpy as np
 import pandas as pd
 
 from cohorts.year import YearCohorts
-from util.quarter import last_n_quarters_label, week_in_quarter
+from util.quarter import week_in_quarter
 
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
@@ -13,47 +11,6 @@ import matplotlib.ticker as mtick
 class ProductCohorts(YearCohorts):
     def __init__(self, df: pd.DataFrame, max_weeks=24, start_month='2024-01', end_month='2026-03'):
         super().__init__(df, max_weeks, start_month, end_month)
-        self.max_weeks = max_weeks
-        self.start_month = start_month
-        self.end_month = end_month
-
-        self.journey = self.get_journey(df)
-        self.quarters_to_plot = last_n_quarters_label(self.QUARTERS_TO_SHOW, date(2026, 3, 31))
-        self.quarters_colors = dict(zip(self.quarters_to_plot, self.QUARTERS_COLORS))
-
-    # @classmethod
-    # def get_journey(cls, df: pd.DataFrame) -> pd.DataFrame:
-    #     df_sorted = df.sort_values(['numero_compte', 'dt_creation_devis'])
-    #     # First and last product per customer
-    #     journey = df_sorted.groupby('numero_compte').agg(
-    #         first_quote_date=('dt_creation_devis', 'first'),
-    #         last_quote_date=('dt_creation_devis', 'last'),
-    #         first_product=('regroup_famille_equipement_produit_principal', 'first'),
-    #         last_product=('regroup_famille_equipement_produit_principal', 'last'),
-    #         converted=('fg_devis_accepte', 'max'),
-    #         total_quotes=('id_devis', 'count'),
-    #         decision_days=('dt_creation_devis', lambda x: (x.max() - x.min()).days)
-    #     ).reset_index()
-    #
-    #     # Build journey label
-    #     journey['segment'] = journey['first_product'] + ' → ' + journey['last_product']
-    #
-    #     # Build weekly cohorts per segment
-    #     journey['cohort_week'] = journey['first_quote_date'].dt.to_period('W').dt.start_time
-    #     journey['year'] = journey['first_quote_date'].dt.year
-    #
-    #     journey['week_in_q'] = week_in_quarter(journey['first_quote_date'])
-    #     journey['quarter_label'] = journey['first_quote_date'].dt.year.astype(str) + ' Q' + journey['first_quote_date'].dt.quarter.astype(
-    #         str)
-    #
-    #     journey['cohort_month'] = journey['first_quote_date'].dt.to_period('M')
-    #
-    #     # Summary
-    #     print(journey['segment'].value_counts())
-    #     print(f"\nTotal customers: {len(journey):,}")
-    #     print(f"Multi-product journeys: {(journey['first_product'] != journey['last_product']).sum():,}")
-    #
-    #     return journey
 
     def plot(self):
 

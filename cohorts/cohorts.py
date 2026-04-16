@@ -1,9 +1,22 @@
 from datetime import date
 
+import pandas as pd
+
 
 class Cohorts:
 
     LAST_DATE = date(2026, 3, 31)
+
+    @staticmethod
+    def map_product(val) -> str:
+        if pd.isna(val):
+            return 'Other'
+        v = str(val).upper()
+        if 'HEAT_PUMP' in v:       return 'HP'
+        if 'BOILER_GAS' in v:      return 'Boiler'
+        if 'AIR_CONDITIONER' in v: return 'AC'
+        if 'STOVE' in v:           return 'Stove'
+        return 'Other'
 
     YEARS = [2024, 2025, 2026]
 

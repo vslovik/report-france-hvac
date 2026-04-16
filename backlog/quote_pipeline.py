@@ -1,87 +1,40 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 
+from cohorts.cohorts import Cohorts
 
-def plot_quote_pipeline(df_clean):
 
-    # Snapshot dates: end of each quarter
-    snapshots = pd.date_range('2024-03-31', '2026-03-31', freq='QE')
-    snapshots = snapshots.append(pd.DatetimeIndex(['2026-03-31']))
-    snapshots = snapshots.unique()
-    print("Snapshot dates:", snapshots.strftime('%Y-%m-%d').tolist())
+def plot_quote_pipeline(df_clean, start_date='2024-03-31', end_date=None):
+    if end_date is None:
+        end_date = Cohorts.LAST_DATE.strftime('%Y-%m-%d')
 
-    # Product mapping
-    def map_product(val):
-        if pd.isna(val):
-            return 'Other'
-        v = str(val).upper()
-        if 'HEAT_PUMP' in v:   return 'HP'
-        if 'BOILER_GAS' in v:  return 'Boiler'
-        if 'AIR_CONDITIONER' in v: return 'AC'
-        if 'STOVE' in v:       return 'Stove'
-        return 'Other'
+    snapshots = pd.date_range(start_date, end_date, freq='QE')
+    snap_labels = [d.strftime('%Y Q') + str((d.month - 1) // 3 + 1) for d in snapshots]
+    print("Snapshot dates:", [s.strftime('%Y-%m-%d') for s in snapshots])
 
-    df_clean['product'] = df_clean['regroup_famille_equipement_produit_principal'].map(map_product)
+    df_clean = df_clean.copy()
+    df_clean['product'] = df_clean['regroup_famille_equipement_produit_principal'].map(Cohorts.map_product)
 
-    #  Build pipeline snapshot at each quarter-end
-    records = []
-
-    for snap_date in snapshots:
-        # Quotes created on or before snapshot date
-        snap_quotes = df_clean[df_clean['dt_creation_devis'] <= snap_date].copy()
-
-        # Non-converted customers at snapshot date
-        converted_by_snap = (
-            snap_quotes.groupby('numero_compte')['fg_devis_accepte']
-            .max()
-        )
-        non_conv_customers = converted_by_snap[converted_by_snap == 0].index
-
-        # Filter to non-converted customers' quotes
-        open_quotes = snap_quotes[snap_quotes['numero_compte'].isin(non_conv_customers)]
-
-        # Per customer: first product, last product, quote count
-        customer_snap = open_quotes.groupby('numero_compte').agg(
-            first_product=('product', 'first'),
-            last_product=('product', 'last'),
-            n_quotes=('id_devis', 'count')
-        ).reset_index()
-
-        customer_snap['segment'] = customer_snap['first_product'] + ' → ' + customer_snap['last_product']
-        customer_snap['quoter_type'] = customer_snap['n_quotes'].apply(
-            lambda x: 'Single-quoter' if x == 1 else 'Multi-quoter'
-        )
-        customer_snap['snapshot'] = snap_date
-        customer_snap['snap_label'] = snap_date.strftime('%Y Q') + str((snap_date.month - 1) // 3 + 1)
-
-        records.append(customer_snap)
-
-    pipeline = pd.concat(records, ignore_index=True)
-    print(f"\nTotal pipeline records: {len(pipeline):,}")
-    print(pipeline['segment'].value_counts().head(10))
-
-    # ── Aggregate counts per snapshot × segment × quoter_type ────────────────────
     main_diag = ['Boiler → Boiler', 'Stove → Stove', 'AC → AC', 'HP → HP']
-
     seg_colors = {
         'Boiler → Boiler': 'steelblue',
-        'Stove → Stove': 'tomato',
-        'AC → AC': 'mediumseagreen',
-        'HP → HP': 'darkorange',
-        'Other → HP': 'purple',
-        'Boiler → HP': 'brown',
-        'HP → Stove': 'pink',
-        'AC → HP': 'olive',
-        'HP → Boiler': 'grey'
+        'Stove → Stove':   'tomato',
+        'AC → AC':         'mediumseagreen',
+        'HP → HP':         'darkorange',
+        'Other → HP':      'purple',
+        'Boiler → HP':     'brown',
+        'HP → Stove':      'pink',
+        'AC → HP':         'olive',
+        'HP → Boiler':     'grey'
     }
-
-    snap_labels = pipeline.sort_values('snapshot')['snap_label'].unique()
 
     thresholds = {
-        'No threshold': None,
+        'No threshold':    None,
         '12-month window': 365,
-        '60-day window': 60
+        '60-day window':   60
     }
+
+    partial_idx = len(snap_labels) - 1  # last snapshot is always the current partial quarter
 
     fig, axes = plt.subplots(3, 2, figsize=(18, 18))
     fig.suptitle('Quote Pipeline Backlog — Threshold Comparison\n(Diagonal segments only)',
@@ -91,21 +44,15 @@ def plot_quote_pipeline(df_clean):
         for col, qtype in enumerate(['Single-quoter', 'Multi-quoter']):
             ax = axes[row, col]
 
-            for snap_date, snap_label in zip(snapshots, snap_labels):
-                pass  # rebuilt below
-
-            # Rebuild pipeline with threshold applied
             thresh_records = []
             for snap_date in snapshots:
                 snap_quotes = df_clean[df_clean['dt_creation_devis'] <= snap_date].copy()
 
-                # Apply threshold — filter to quotes created within window
                 if days is not None:
                     snap_quotes = snap_quotes[
                         snap_quotes['dt_creation_devis'] >= snap_date - pd.Timedelta(days=days)
-                        ]
+                    ]
 
-                # Non-converted at snapshot
                 converted_by_snap = snap_quotes.groupby('numero_compte')['fg_devis_accepte'].max()
                 non_conv = converted_by_snap[converted_by_snap == 0].index
 
@@ -114,7 +61,7 @@ def plot_quote_pipeline(df_clean):
                 all_quotes_to_snap = df_clean[
                     (df_clean['dt_creation_devis'] <= snap_date) &
                     (df_clean['numero_compte'].isin(non_conv))
-                    ]
+                ]
 
                 customer_snap = all_quotes_to_snap.groupby('numero_compte').agg(
                     first_product=('product', 'first'),
@@ -126,12 +73,10 @@ def plot_quote_pipeline(df_clean):
                 customer_snap['quoter_type'] = customer_snap['n_quotes'].apply(
                     lambda x: 'Single-quoter' if x == 1 else 'Multi-quoter'
                 )
-                customer_snap['snapshot'] = snap_date
                 customer_snap['snap_label'] = snap_date.strftime('%Y Q') + str((snap_date.month - 1) // 3 + 1)
                 thresh_records.append(customer_snap)
 
             thresh_pipeline = pd.concat(thresh_records, ignore_index=True)
-
             thresh_agg = (
                 thresh_pipeline.groupby(['snap_label', 'segment', 'quoter_type'])
                 .size()
@@ -142,7 +87,7 @@ def plot_quote_pipeline(df_clean):
                 d = thresh_agg[
                     (thresh_agg['quoter_type'] == qtype) &
                     (thresh_agg['segment'] == seg)
-                    ].set_index('snap_label').reindex(snap_labels)
+                ].set_index('snap_label').reindex(snap_labels)
 
                 if d['n_customers'].isna().all():
                     continue
@@ -153,13 +98,16 @@ def plot_quote_pipeline(df_clean):
                         label=seg)
 
             ax.set_title(f'{thresh_label} — {qtype}', fontweight='bold', fontsize=10)
+
+
+
             ax.set_ylabel('Customers in pipeline')
             ax.set_xlabel('Quarter end')
             ax.tick_params(axis='x', rotation=30)
             ax.legend(fontsize=8)
             ax.grid(True, axis='y', alpha=0.3)
-            ax.axvspan(7.5, 8.5, alpha=0.08, color='orange')
-            ax.text(7.6, ax.get_ylim()[1] * 0.97, '⚠ partial',
+            ax.axvspan(partial_idx - 0.5, partial_idx + 0.5, alpha=0.08, color='orange')
+            ax.text(partial_idx - 0.4, ax.get_ylim()[1] * 0.97, '⚠ partial',
                     fontsize=7.5, color='darkorange', va='top')
 
     plt.tight_layout()

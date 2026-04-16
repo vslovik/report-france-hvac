@@ -1,27 +1,16 @@
-from datetime import date
-
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
-import numpy as np
 import pandas as pd
 
-from cohorts.cohorts import Cohorts
+from cohorts.year import YearCohorts
 from util.quarter import last_n_quarters_label
 
 
-class WeeklyCohorts(Cohorts):
+class WeeklyCohorts(YearCohorts):
     def __init__(self, df: pd.DataFrame):
         self.journey = self.get_journey(df)
-        self.journey_excl = self.get_journey__exclude_agencies(df)
-        self.journey_agency = self.get_journey_agency(df)
-        self.journey_agency_process = self.get_journey_agency_process(df)
-        self.new_process = df.groupby('nom_agence').agg(
-            first_new_process=('dt_creation_devis',
-                               lambda x: x[df.loc[x.index, 'fg_nouveau_process_relance_devis'] == 1].min()),
-        ).reset_index()
-
         self.switchers = self.get_switchers(self.journey)
-        self.quarters_to_plot = last_n_quarters_label(self.QUARTERS_TO_SHOW, date(2026, 3, 31))
+        self.quarters_to_plot = last_n_quarters_label(self.QUARTERS_TO_SHOW, self.LAST_DATE)
         self.quarters_colors = dict(zip(self.quarters_to_plot, self.QUARTERS_COLORS))
 
     # Helper: assign week-within-quarter
@@ -31,141 +20,22 @@ class WeeklyCohorts(Cohorts):
         return ((date_series - quarter_start) / pd.Timedelta(weeks=1)).astype(int) + 1
 
     @classmethod
-    def get_journey(cls, df: pd.DataFrame) -> pd.DataFrame:
-        df_sorted = df.sort_values(['numero_compte', 'dt_creation_devis'])
-        # First and last product per customer
-        journey = df_sorted.groupby('numero_compte').agg(
-            first_quote_date=('dt_creation_devis', 'first'),
-            last_quote_date=('dt_creation_devis', 'last'),
-            first_product=('regroup_famille_equipement_produit_principal', 'first'),
-            last_product=('regroup_famille_equipement_produit_principal', 'last'),
-            converted=('fg_devis_accepte', 'max'),
-            total_quotes=('id_devis', 'count'),
-            decision_days=('dt_creation_devis', lambda x: (x.max() - x.min()).days)
-        ).reset_index()
-
-        # Build journey label
-        journey['segment'] = journey['first_product'] + ' → ' + journey['last_product']
-
-        # Build weekly cohorts per segment
-        journey['cohort_week'] = journey['first_quote_date'].dt.to_period('W').dt.start_time
-        journey['year'] = journey['first_quote_date'].dt.year
-
-        journey['week_in_q'] = cls.week_in_quarter(journey['first_quote_date'])
-        journey['quarter_label'] = journey['first_quote_date'].dt.year.astype(str) + ' Q' + journey['first_quote_date'].dt.quarter.astype(
-            str)
-
-        journey['cohort_month'] = journey['first_quote_date'].dt.to_period('M')
-
-        # Summary
-        print(journey['segment'].value_counts())
-        print(f"\nTotal customers: {len(journey):,}")
-        print(f"Multi-product journeys: {(journey['first_product'] != journey['last_product']).sum():,}")
-
-        return journey
-
-    @classmethod
-    def get_journey_agency(cls, df: pd.DataFrame) -> pd.DataFrame:
-        # Add agency to journey from raw quotes
-        agency_per_customer = (
-            df.sort_values('dt_creation_devis')
-            .groupby('numero_compte')['nom_agence']
-            .first()
-            .reset_index()
-            .rename(columns={'nom_agence': 'main_agency'})
-        )
-        journey = cls.get_journey(df)
-        journey_agency = journey.merge(agency_per_customer, on='numero_compte', how='left')
-        journey_agency['cohort_month'] = journey_agency['first_quote_date'].dt.to_period('M')
-        journey_agency['conv_week'] = np.where(
-            journey_agency['decision_days'] == 0, 0,
-            np.ceil(journey_agency['decision_days'] / 7).astype(int)
-        )
-
-        return journey_agency
-
-    @classmethod
-    def get_journey_agency_process(cls, df: pd.DataFrame) -> pd.DataFrame:
-        journey_agency = cls.get_journey_agency(df)
-
-        # Add process flag to journey_agency
-        # Get dominant process flag per customer (max = if any quote was new process)
-        process_per_customer = (
-            df.groupby('numero_compte')['fg_nouveau_process_relance_devis']
-            .max()
-            .reset_index()
-            .rename(columns={'fg_nouveau_process_relance_devis': 'new_process'})
-        )
-        journey_agency_process = journey_agency.merge(process_per_customer, on='numero_compte', how='left')
-
-        return journey_agency_process
-
-    @classmethod
-    def get_journey__exclude_agencies(cls, df: pd.DataFrame):
-        def map_product(val):
-            if pd.isna(val):
-                return 'Other'
-            v = str(val).upper()
-            if 'HEAT_PUMP' in v: return 'HP'
-            if 'BOILER_GAS' in v: return 'Boiler'
-            if 'AIR_CONDITIONER' in v: return 'AC'
-            if 'STOVE' in v: return 'Stove'
-            return 'Other'
-
-        # Exclude late-onboarding agencies
-        late_agencies = ['Lepretre', 'SMT Energies', 'GD Energies']
-
-        df_excl = df[~df['nom_agence'].isin(late_agencies)].copy()
-        df_excl['product'] = df_excl['regroup_famille_equipement_produit_principal'].map(map_product)
-
-        print(f"Full dataset:     {df['numero_compte'].nunique():,} customers")
-        print(f"Excluding 3 LBCs: {df_excl['numero_compte'].nunique():,} customers")
-        print(
-            f"Removed:          {df['numero_compte'].nunique() - df_excl['numero_compte'].nunique():,} customers")
-
-        # Rebuild journey for excluded dataset
-        df_excl_sorted = df_excl.sort_values(['numero_compte', 'dt_creation_devis'])
-
-        journey_excl = df_excl_sorted.groupby('numero_compte').agg(
-            first_quote_date=('dt_creation_devis', 'first'),
-            last_quote_date=('dt_creation_devis', 'last'),
-            first_product=('product', 'first'),
-            last_product=('product', 'last'),
-            converted=('fg_devis_accepte', 'max'),
-            decision_days=('dt_creation_devis', lambda x: (x.max() - x.min()).days)
-        ).reset_index()
-
-        journey_excl['segment'] = journey_excl['first_product'] + ' → ' + journey_excl['last_product']
-        journey_excl['cohort_month'] = journey_excl['first_quote_date'].dt.to_period('M')
-        journey_excl['conv_week'] = np.where(
-            journey_excl['decision_days'] == 0, 0,
-            np.ceil(journey_excl['decision_days'] / 7).astype(int)
-        )
-
-        return journey_excl
-
-    @classmethod
     def get_switchers(cls, journey: pd.DataFrame) -> pd.DataFrame:
-        # Switcher segments with >50 customers
         switchers = journey[journey['first_product'] != journey['last_product']].copy()
 
-        # Filter meaningful segments
         switcher_counts = switchers['segment'].value_counts()
         meaningful = switcher_counts[switcher_counts > 50].index.tolist()
 
-        print(switcher_counts[switcher_counts > 50])
-        print(f"\nTotal switcher segments to plot: {len(meaningful)}")
-
         # Build weekly cohorts per switcher segment
         switchers['cohort_week'] = switchers['first_quote_date'].dt.to_period('W').dt.start_time
-
-        # Monthly cohorts
         switchers['cohort_month'] = switchers['first_quote_date'].dt.to_period('M').dt.start_time
         switchers['week_in_q'] = cls.week_in_quarter(switchers['first_quote_date'])
-        switchers['quarter_label'] = switchers['first_quote_date'].dt.year.astype(str) + ' Q' + switchers['first_quote_date'].dt.quarter.astype(
-            str)
+        switchers['quarter_label'] = (
+            switchers['first_quote_date'].dt.year.astype(str)
+            + ' Q' + switchers['first_quote_date'].dt.quarter.astype(str)
+        )
 
-        return switchers
+        return switchers[switchers['segment'].isin(meaningful)].copy()
 
     def plot_weekly_cohorts_performance_trend__single_quoters(self):
         cohort_seg = (
@@ -180,7 +50,6 @@ class WeeklyCohorts(Cohorts):
         )
         cohort_seg['conversion_rate'] = cohort_seg['converted'] / cohort_seg['total'] * 100
 
-        # Rolling average (4-week) per segment
         cohort_seg = cohort_seg.sort_values(['segment', 'cohort_week'])
         cohort_seg['conv_roll4'] = (
             cohort_seg.groupby('segment')['conversion_rate']
@@ -191,7 +60,6 @@ class WeeklyCohorts(Cohorts):
             .transform(lambda x: x.rolling(4, center=True, min_periods=2).mean())
         )
 
-        # Mark incomplete cohorts (last 12 weeks)
         cutoff = self.journey['cohort_week'].max() - pd.Timedelta(weeks=12)
         cohort_seg['incomplete'] = cohort_seg['cohort_week'] > cutoff
 
@@ -206,17 +74,11 @@ class WeeklyCohorts(Cohorts):
             label = self.MAIN_SEGMENT_LABELS[seg]
 
             for ax, metric, roll in zip(axes, ['conversion_rate', 'avg_decision_days'], ['conv_roll4', 'days_roll4']):
-                # Raw dots
-                ax.scatter(complete['cohort_week'], complete[metric],
-                           s=12, alpha=0.3, color=color)
-                # Rolling avg — complete
-                ax.plot(complete['cohort_week'], complete[roll],
-                        color=color, linewidth=2, label=label)
-                # Rolling avg — incomplete (dashed)
+                ax.scatter(complete['cohort_week'], complete[metric], s=12, alpha=0.3, color=color)
+                ax.plot(complete['cohort_week'], complete[roll], color=color, linewidth=2, label=label)
                 ax.plot(incompl['cohort_week'], incompl[roll],
                         color=color, linewidth=1.5, linestyle='--', alpha=0.6)
 
-        # Panel 1: Conversion rate
         axes[0].set_title('Conversion Rate (4-week rolling avg)', fontsize=11, loc='left')
         axes[0].set_ylabel('Conversion Rate')
         axes[0].yaxis.set_major_formatter(mtick.PercentFormatter())
@@ -224,17 +86,14 @@ class WeeklyCohorts(Cohorts):
         axes[0].grid(True, axis='y', alpha=0.3)
         axes[0].tick_params(labelbottom=False)
 
-        # Panel 2: Decision days
         axes[1].set_title('Avg Decision Days (4-week rolling avg)', fontsize=11, loc='left')
         axes[1].set_ylabel('Days to Convert')
         axes[1].legend(fontsize=9)
         axes[1].grid(True, axis='y', alpha=0.3)
         axes[1].tick_params(axis='x', rotation=30)
 
-        # Shade incomplete zone on both panels
         for ax in axes:
-            ax.axvspan(cutoff, self.journey['cohort_week'].max(),
-                       alpha=0.07, color='orange')
+            ax.axvspan(cutoff, self.journey['cohort_week'].max(), alpha=0.07, color='orange')
             ax.text(cutoff, ax.get_ylim()[1] * 0.97, '  ⚠ incomplete',
                     fontsize=7.5, color='darkorange', va='top')
 
@@ -255,7 +114,6 @@ class WeeklyCohorts(Cohorts):
         )
         cohort_sw_m['conversion_rate'] = cohort_sw_m['converted'] / cohort_sw_m['total'] * 100
 
-        # Rolling avg (3-month)
         cohort_sw_m = cohort_sw_m.sort_values(['segment', 'cohort_month'])
         cohort_sw_m['conv_roll3'] = (
             cohort_sw_m.groupby('segment')['conversion_rate']
@@ -266,7 +124,6 @@ class WeeklyCohorts(Cohorts):
             .transform(lambda x: x.rolling(3, center=True, min_periods=2).mean())
         )
 
-        # Incomplete = last 3 months
         cutoff_m = self.switchers['cohort_month'].max() - pd.DateOffset(months=3)
         cohort_sw_m['incomplete'] = cohort_sw_m['cohort_month'] > cutoff_m
 
@@ -284,8 +141,7 @@ class WeeklyCohorts(Cohorts):
             for ax, metric, roll in zip(axes,
                                         ['conversion_rate', 'avg_decision_days'],
                                         ['conv_roll3', 'days_roll3']):
-                ax.scatter(complete['cohort_month'], complete[metric],
-                           s=25, alpha=0.35, color=color)
+                ax.scatter(complete['cohort_month'], complete[metric], s=25, alpha=0.35, color=color)
                 ax.plot(complete['cohort_month'], complete[roll],
                         color=color, linewidth=2.2, label=f'{label}  (n={n})')
                 ax.plot(incompl['cohort_month'], incompl[roll],
@@ -305,8 +161,7 @@ class WeeklyCohorts(Cohorts):
         axes[1].tick_params(axis='x', rotation=30)
 
         for ax in axes:
-            ax.axvspan(cutoff_m, self.switchers['cohort_month'].max(),
-                       alpha=0.07, color='orange')
+            ax.axvspan(cutoff_m, self.switchers['cohort_month'].max(), alpha=0.07, color='orange')
             ax.text(cutoff_m, ax.get_ylim()[1] * 0.97, '  ⚠ incomplete',
                     fontsize=7.5, color='darkorange', va='top')
 
@@ -315,16 +170,17 @@ class WeeklyCohorts(Cohorts):
         plt.show()
 
     def plot_quarters_report(self):
-        # Assign quarter label
         for d in [self.journey, self.switchers]:
-            d['quarter_label'] = d['first_quote_date'].dt.year.astype(str) + ' Q' + d[
-                'first_quote_date'].dt.quarter.astype(
-                str)
+            d['quarter_label'] = (
+                d['first_quote_date'].dt.year.astype(str)
+                + ' Q' + d['first_quote_date'].dt.quarter.astype(str)
+            )
 
-        # Diagonal segments
         diag_q = (
             self.journey[
-                self.journey['segment'].isin(self.MAIN_SEGMENTS) & self.journey['quarter_label'].isin(self.quarters_to_plot)]
+                self.journey['segment'].isin(self.MAIN_SEGMENTS)
+                & self.journey['quarter_label'].isin(self.quarters_to_plot)
+            ]
             .groupby(['segment', 'quarter_label'])
             .agg(total=('numero_compte', 'count'),
                  converted=('converted', 'sum'),
@@ -333,10 +189,11 @@ class WeeklyCohorts(Cohorts):
         )
         diag_q['conversion_rate'] = diag_q['converted'] / diag_q['total'] * 100
 
-        # Switcher segments
         sw_q = (
-            self.switchers[self.switchers['segment'].isin(self.TOP_SWITCHERS) & self.switchers['quarter_label'].isin(
-                self.quarters_to_plot)]
+            self.switchers[
+                self.switchers['segment'].isin(self.TOP_SWITCHERS)
+                & self.switchers['quarter_label'].isin(self.quarters_to_plot)
+            ]
             .groupby(['segment', 'quarter_label'])
             .agg(total=('numero_compte', 'count'),
                  converted=('converted', 'sum'),
@@ -345,24 +202,24 @@ class WeeklyCohorts(Cohorts):
         )
         sw_q['conversion_rate'] = sw_q['converted'] / sw_q['total'] * 100
 
-        # Plot
         fig, axes = plt.subplots(2, 2, figsize=(18, 11))
         fig.suptitle('Quarterly Comparison: 2025 Q1–Q4 vs 2026 Q1', fontsize=14, fontweight='bold')
 
+        partial_q = self.quarters_to_plot[-1]
+        partial_idx = len(self.quarters_to_plot) - 1
+
         def plot_quarterly(ax, data, segments, colors, labels, metric, ylabel, title):
+            ax.axvspan(partial_idx - 0.5, partial_idx + 0.5, alpha=0.08, color='orange')
             for seg in segments:
                 d = data[data['segment'] == seg].set_index('quarter_label').reindex(self.quarters_to_plot)
                 color = colors[seg]
                 label = labels[seg]
-                # Shade 2026 Q1 as partial
-                ax.axvspan(3.5, 4.5, alpha=0.08, color='orange')
                 ax.plot(self.quarters_to_plot, d[metric].values, marker='o', linewidth=2.2,
                         markersize=7, color=color, label=label)
-                # Annotate last point
                 val = d[metric].iloc[-1]
                 if not pd.isna(val):
                     fmt = f'{val:.0f}%' if 'rate' in metric else f'{val:.0f}d'
-                    ax.annotate(fmt, xy=(4, val), xytext=(4.05, val),
+                    ax.annotate(fmt, xy=(partial_idx, val), xytext=(partial_idx + 0.05, val),
                                 fontsize=7.5, color=color, va='center')
             ax.set_title(title, fontsize=10, fontweight='bold', loc='left')
             ax.set_ylabel(ylabel)
@@ -371,26 +228,21 @@ class WeeklyCohorts(Cohorts):
             ax.tick_params(axis='x', rotation=30)
             ax.legend(fontsize=8)
             ax.grid(True, axis='y', alpha=0.3)
-            ax.text(3.7, ax.get_ylim()[1] * 0.97, '⚠ partial',
+            ax.text(partial_idx - 0.3, ax.get_ylim()[1] * 0.97, '⚠ partial',
                     fontsize=7.5, color='darkorange', va='top')
 
-        plot_quarterly(axes[0, 0], diag_q, self.MAIN_SEGMENTS, self.MAIN_SEGMENT_COLORS, self.MAIN_SEGMENT_LABELS,
-                       'conversion_rate', 'Conversion Rate',
+        plot_quarterly(axes[0, 0], diag_q, self.MAIN_SEGMENTS, self.MAIN_SEGMENT_COLORS,
+                       self.MAIN_SEGMENT_LABELS, 'conversion_rate', 'Conversion Rate',
                        'Diagonal — Conversion Rate')
-
-        plot_quarterly(axes[1, 0], diag_q, self.MAIN_SEGMENTS, self.MAIN_SEGMENT_COLORS, self.MAIN_SEGMENT_LABELS,
-                       'avg_decision_days', 'Avg Decision Days',
+        plot_quarterly(axes[1, 0], diag_q, self.MAIN_SEGMENTS, self.MAIN_SEGMENT_COLORS,
+                       self.MAIN_SEGMENT_LABELS, 'avg_decision_days', 'Avg Decision Days',
                        'Diagonal — Decision Days')
-
         plot_quarterly(axes[0, 1], sw_q, self.TOP_SWITCHERS, self.TOP_SWITCHER_COLORS,
                        {s: s.replace('_', ' ') for s in self.TOP_SWITCHERS},
-                       'conversion_rate', 'Conversion Rate',
-                       'Switchers — Conversion Rate')
-
+                       'conversion_rate', 'Conversion Rate', 'Switchers — Conversion Rate')
         plot_quarterly(axes[1, 1], sw_q, self.TOP_SWITCHERS, self.TOP_SWITCHER_COLORS,
                        {s: s.replace('_', ' ') for s in self.TOP_SWITCHERS},
-                       'avg_decision_days', 'Avg Decision Days',
-                       'Switchers — Decision Days')
+                       'avg_decision_days', 'Avg Decision Days', 'Switchers — Decision Days')
 
         plt.tight_layout()
         plt.savefig(f'{self.OUTPUT_DIR}/quarterly_comparison.png', dpi=150, bbox_inches='tight')
@@ -401,71 +253,65 @@ class WeeklyCohorts(Cohorts):
         filtered = df[df['segment'].isin(segments) & df['quarter_label'].isin(self.quarters_to_plot)]
         if freq == 'M':
             filtered = filtered.copy()
-            filtered['week_in_q'] = ((filtered['week_in_q'] - 1) // 2) + 1  # bi-weekly buckets
+            filtered['week_in_q'] = ((filtered['week_in_q'] - 1) // 2) + 1
 
         return (
             filtered
             .groupby(['segment', 'quarter_label', 'week_in_q'])
-            .agg(total=('numero_compte', 'count'),
-                 converted=('converted', 'sum'))
+            .agg(total=('numero_compte', 'count'), converted=('converted', 'sum'))
             .reset_index()
             .assign(conversion_rate=lambda x: x['converted'] / x['total'] * 100)
         )
 
     def plot_intra_quarter(self, data, segments, labels, title_prefix, freq_label, ncols=2):
-            nrows = len(segments) // ncols + len(segments) % ncols
-            fig, axes = plt.subplots(nrows, ncols, figsize=(16, 4 * nrows), sharey=False)
-            fig.suptitle(f'{title_prefix} — Conversion Rate Within Quarter', fontsize=13, fontweight='bold')
-            axes = axes.flatten()
+        nrows = len(segments) // ncols + len(segments) % ncols
+        fig, axes = plt.subplots(nrows, ncols, figsize=(16, 4 * nrows), sharey=False)
+        fig.suptitle(f'{title_prefix} — Conversion Rate Within Quarter', fontsize=13, fontweight='bold')
+        axes = axes.flatten()
 
-            for i, seg in enumerate(segments):
-                ax = axes[i]
-                d = data[data['segment'] == seg]
-                label = labels[seg]
+        for i, seg in enumerate(segments):
+            ax = axes[i]
+            d = data[data['segment'] == seg]
+            label = labels[seg]
 
-                for q in self.quarters_to_plot:
-                    qd = d[d['quarter_label'] == q].sort_values('week_in_q')
-                    if qd.empty:
-                        continue
-                    # smooth with rolling avg if enough points
-                    y = qd['conversion_rate'].rolling(2, min_periods=1).mean()
-                    ls = '--' if q == '2026 Q1' else '-'
-                    ax.plot(qd['week_in_q'], y, marker='o', linewidth=2,
-                            markersize=5, color=self.quarters_colors[q], linestyle=ls, label=q)
+            for q in self.quarters_to_plot:
+                qd = d[d['quarter_label'] == q].sort_values('week_in_q')
+                if qd.empty:
+                    continue
+                y = qd['conversion_rate'].rolling(2, min_periods=1).mean()
+                ls = '--' if q == self.quarters_to_plot[-1] else '-'
+                ax.plot(qd['week_in_q'], y, marker='o', linewidth=2,
+                        markersize=5, color=self.quarters_colors[q], linestyle=ls, label=q)
 
-                ax.set_title(label, fontweight='bold', fontsize=10)
-                ax.set_xlabel(f'{freq_label} within quarter')
-                ax.set_ylabel('Conversion Rate')
-                ax.yaxis.set_major_formatter(mtick.PercentFormatter())
-                ax.legend(fontsize=8)
-                ax.grid(True, axis='y', alpha=0.3)
+            ax.set_title(label, fontweight='bold', fontsize=10)
+            ax.set_xlabel(f'{freq_label} within quarter')
+            ax.set_ylabel('Conversion Rate')
+            ax.yaxis.set_major_formatter(mtick.PercentFormatter())
+            ax.legend(fontsize=8)
+            ax.grid(True, axis='y', alpha=0.3)
 
-            # Hide unused subplots
-            for j in range(i + 1, len(axes)):
-                axes[j].set_visible(False)
+        for j in range(i + 1, len(axes)):
+            axes[j].set_visible(False)
 
-            plt.tight_layout()
-            return fig
+        plt.tight_layout()
+        return fig
 
     def plot_intra_quarters(self):
         diag_intra = self.build_intra_cohorts(self.journey, self.MAIN_SEGMENTS, freq='W')
         sw_intra = self.build_intra_cohorts(self.switchers, self.TOP_SWITCHERS, freq='M')
 
-        # Plot stayers (weekly)
         fig1 = self.plot_intra_quarter(
             diag_intra, self.MAIN_SEGMENTS, self.MAIN_SEGMENT_LABELS,
             title_prefix='Stayers', freq_label='Week'
         )
         fig1.savefig(f'{self.OUTPUT_DIR}/intra_quarter_stayers.png', dpi=150, bbox_inches='tight')
 
-        # Plot switchers (bi-weekly)
         fig2 = self.plot_intra_quarter(
             sw_intra, self.TOP_SWITCHERS,
             {s: s.replace('_', ' ') for s in self.TOP_SWITCHERS},
             title_prefix='Switchers', freq_label='Bi-week'
         )
         fig2.savefig(f'{self.OUTPUT_DIR}/intra_quarter_switchers.png', dpi=150, bbox_inches='tight')
-
         plt.show()
 
     def plot_quarter_x_product(self, data, segments, labels, colors, title_prefix, freq_label, ncols=3):
@@ -477,7 +323,7 @@ class WeeklyCohorts(Cohorts):
 
         for i, q in enumerate(self.quarters_to_plot):
             ax = axes[i]
-            ls = '--' if q == '2026 Q1' else '-'
+            ls = '--' if q == self.quarters_to_plot[-1] else '-'
 
             for seg in segments:
                 d = data[(data['segment'] == seg) & (data['quarter_label'] == q)].sort_values('week_in_q')
@@ -488,8 +334,8 @@ class WeeklyCohorts(Cohorts):
                         markersize=5, color=colors[seg], linestyle=ls,
                         label=labels[seg])
 
-            ax.set_title(f'{q}{"  ⚠ partial" if q == "2026 Q1" else ""}',
-                         fontweight='bold', fontsize=10)
+            partial_suffix = '  ⚠ partial' if q == self.quarters_to_plot[-1] else ''
+            ax.set_title(f'{q}{partial_suffix}', fontweight='bold', fontsize=10)
             ax.set_xlabel(f'{freq_label} within quarter')
             ax.set_ylabel('Conversion Rate')
             ax.yaxis.set_major_formatter(mtick.PercentFormatter())
@@ -499,21 +345,19 @@ class WeeklyCohorts(Cohorts):
         for j in range(i + 1, len(axes)):
             axes[j].set_visible(False)
 
-            plt.tight_layout()
-            return fig
+        plt.tight_layout()
+        return fig
 
     def plot_quarter_x_product_report(self):
         diag_intra = self.build_intra_cohorts(self.journey, self.MAIN_SEGMENTS, freq='W')
         sw_intra = self.build_intra_cohorts(self.switchers, self.TOP_SWITCHERS, freq='M')
 
-        # Stayers — weekly
         fig1 = self.plot_quarter_x_product(
             diag_intra, self.MAIN_SEGMENTS, self.MAIN_SEGMENT_LABELS, self.MAIN_SEGMENT_COLORS,
             title_prefix='Stayers', freq_label='Week'
         )
         fig1.savefig(f'{self.OUTPUT_DIR}/quarter_x_product_stayers.png', dpi=150, bbox_inches='tight')
 
-        # Switchers — bi-weekly
         fig2 = self.plot_quarter_x_product(
             sw_intra, self.TOP_SWITCHERS,
             {s: s.replace('_', ' ') for s in self.TOP_SWITCHERS},
@@ -521,29 +365,4 @@ class WeeklyCohorts(Cohorts):
             title_prefix='Switchers', freq_label='Bi-week'
         )
         fig2.savefig(f'{self.OUTPUT_DIR}/quarter_x_product_switchers.png', dpi=150, bbox_inches='tight')
-
         plt.show()
-
-
-def get_journey(df: pd.DataFrame):
-    return WeeklyCohorts(df).get_journey(df)
-
-
-def plot_weekly_cohorts_performance_trend__single_quoters(df: pd.DataFrame) -> None:
-    WeeklyCohorts(df).plot_weekly_cohorts_performance_trend__single_quoters()
-
-
-def plot_weekly_cohorts_performance_trend__switchers(df: pd.DataFrame) -> None:
-    WeeklyCohorts(df).plot_weekly_cohorts_performance_trend__switchers()
-
-
-def plot_quarters_report(df: pd.DataFrame) -> None:
-    WeeklyCohorts(df).plot_quarters_report()
-
-
-def plot_intra_quarters(df: pd.DataFrame) -> None:
-    WeeklyCohorts(df).plot_intra_quarters()
-
-
-def plot_quarter_x_product_report(df: pd.DataFrame) -> None:
-    WeeklyCohorts(df).plot_quarter_x_product_report()

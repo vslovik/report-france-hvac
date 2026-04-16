@@ -17,7 +17,7 @@ class YearCohorts(Cohorts):
         self.end_month = end_month
 
         self.journey = self.get_journey(df)
-        self.quarters_to_plot = last_n_quarters_label(self.QUARTERS_TO_SHOW, date(2026, 3, 31))
+        self.quarters_to_plot = last_n_quarters_label(self.QUARTERS_TO_SHOW, self.LAST_DATE)
         self.quarters_colors = dict(zip(self.quarters_to_plot, self.QUARTERS_COLORS))
 
     @classmethod
@@ -46,11 +46,6 @@ class YearCohorts(Cohorts):
             str)
 
         journey['cohort_month'] = journey['first_quote_date'].dt.to_period('M')
-
-        # Summary
-        print(journey['segment'].value_counts())
-        print(f"\nTotal customers: {len(journey):,}")
-        print(f"Multi-product journeys: {(journey['first_product'] != journey['last_product']).sum():,}")
 
         return journey
 

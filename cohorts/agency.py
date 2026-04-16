@@ -11,12 +11,6 @@ class AgencyCohorts(ProductCohorts):
     def __init__(self, df: pd.DataFrame, max_weeks=24, start_month='2024-01', end_month='2026-03'):
         super().__init__(df, max_weeks, start_month, end_month)
 
-        self.max_weeks = max_weeks
-        self.start_month = start_month
-        self.end_month = end_month
-
-        self.journey = self.get_journey(df)
-
     @classmethod
     def get_journey(cls, df: pd.DataFrame) -> pd.DataFrame:
         # Add agency to journey from raw quotes
