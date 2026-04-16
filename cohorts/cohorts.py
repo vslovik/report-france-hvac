@@ -5,7 +5,20 @@ import pandas as pd
 
 class Cohorts:
 
+    # ── Single knob: update this date when new data arrives ──────────
     LAST_DATE = date(2026, 3, 31)
+
+    # Rolling window sizes — change these to widen/narrow the report
+    YEARS_TO_SHOW    = 3   # how many calendar years to include
+    QUARTERS_TO_SHOW = 5   # how many quarters in quarterly comparison plots
+
+    # Derived — do not edit manually
+    YEARS       = list(range(LAST_DATE.year - YEARS_TO_SHOW + 1, LAST_DATE.year + 1))
+    START_MONTH = f'{YEARS[0]}-01'
+    END_MONTH   = LAST_DATE.strftime('%Y-%m')
+
+    _YEAR_COLOR_PALETTE = ['steelblue', 'tomato', 'mediumseagreen', 'darkorange', 'purple']
+    YEARS_COLORS = dict(zip(YEARS, _YEAR_COLOR_PALETTE))
 
     @staticmethod
     def map_product(val) -> str:
@@ -18,15 +31,6 @@ class Cohorts:
         if 'STOVE' in v:           return 'Stove'
         return 'Other'
 
-    YEARS = [2024, 2025, 2026]
-
-    YEARS_COLORS = {
-        2024: 'steelblue',
-        2025: 'tomato',
-        2026: 'mediumseagreen'
-    }
-
-    QUARTERS_TO_SHOW = 5
     QUARTERS_COLORS = [
         'steelblue',
         'mediumseagreen',

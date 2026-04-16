@@ -11,10 +11,10 @@ import matplotlib.ticker as mtick
 
 
 class YearCohorts(Cohorts):
-    def __init__(self, df: pd.DataFrame, max_weeks=24, start_month='2024-01', end_month='2026-03'):
+    def __init__(self, df: pd.DataFrame, max_weeks=24, start_month=None, end_month=None):
         self.max_weeks = max_weeks
-        self.start_month = start_month
-        self.end_month = end_month
+        self.start_month = start_month if start_month is not None else self.START_MONTH
+        self.end_month   = end_month   if end_month   is not None else self.END_MONTH
 
         self.journey = self.get_journey(df)
         self.quarters_to_plot = last_n_quarters_label(self.QUARTERS_TO_SHOW, self.LAST_DATE)
@@ -86,11 +86,13 @@ class YearCohorts(Cohorts):
 
         # Plot: all cohorts on one graph
         fig, ax = plt.subplots(figsize=(16, 7))
-        fig.suptitle('Monthly Cohort Conversion Curves  —  Jan 2024 to Mar 2026',
+        start_label = pd.Period(self.start_month, 'M').strftime('%b %Y')
+        end_label   = pd.Period(self.end_month,   'M').strftime('%b %Y')
+        fig.suptitle(f'Monthly Cohort Conversion Curves  —  {start_label} to {end_label}',
                      fontsize=13, fontweight='bold')
 
         # Mark incomplete cohorts (last 3 months = fewer than 24 weeks of data)
-        cutoff_month = pd.Period('2025-12', 'M') #ToDo
+        cutoff_month = pd.Period(self.LAST_DATE, 'M') - 3
 
         for month in all_months:
             d = curves_df[curves_df['cohort'] == str(month)]
@@ -140,7 +142,7 @@ class YearCohorts(Cohorts):
 
             for i, month in enumerate(year_months):
                 d = curves_df[curves_df['cohort'] == str(month)]
-                months_since = (pd.Period('2026-03', 'M') - month).n
+                months_since = (pd.Period(self.end_month, 'M') - month).n
                 max_w = min(self.max_weeks, months_since * 4)
                 d = d[d['week'] <= max_w]
 

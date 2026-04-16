@@ -11,7 +11,7 @@ from util.plot import plot_median_band
 class AgencyProcessCohorts(AgencyCohorts):
     MIN_CUSTOMERS = 50  # minimum per agency×product to plot
 
-    def __init__(self, df: pd.DataFrame, max_weeks=24, start_month='2024-01', end_month='2026-03'):
+    def __init__(self, df: pd.DataFrame, max_weeks=24, start_month=None, end_month=None):
         super().__init__(df, max_weeks, start_month, end_month)
         self.new_process = df.groupby('nom_agence').agg(
             first_new_process=('dt_creation_devis',

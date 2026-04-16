@@ -9,12 +9,12 @@ import matplotlib.ticker as mtick
 
 
 class ProductCohorts(YearCohorts):
-    def __init__(self, df: pd.DataFrame, max_weeks=24, start_month='2024-01', end_month='2026-03'):
+    def __init__(self, df: pd.DataFrame, max_weeks=24, start_month=None, end_month=None):
         super().__init__(df, max_weeks, start_month, end_month)
 
     def plot(self):
 
-        cutoff_month = pd.Period('2025-12', 'M')
+        cutoff_month = pd.Period(self.LAST_DATE, 'M') - 3
 
         # Build curves per segment × cohort month
         segments_to_plot = self.MAIN_SEGMENTS + self.TOP_SWITCHERS
@@ -153,7 +153,7 @@ class ProductCohorts(YearCohorts):
                         ]
                     if d.empty:
                         continue
-                    months_since = (pd.Period('2026-03', 'M') - month).n
+                    months_since = (pd.Period(self.end_month, 'M') - month).n
                     max_w = min(self.max_weeks, months_since * 4)
                     d = d[d['week'] <= max_w]
                     ls = '--' if month > cutoff_month else '-'

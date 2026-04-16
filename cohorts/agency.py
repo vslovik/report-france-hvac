@@ -8,7 +8,7 @@ from util.plot import plot_median_band
 
 
 class AgencyCohorts(ProductCohorts):
-    def __init__(self, df: pd.DataFrame, max_weeks=24, start_month='2024-01', end_month='2026-03'):
+    def __init__(self, df: pd.DataFrame, max_weeks=24, start_month=None, end_month=None):
         super().__init__(df, max_weeks, start_month, end_month)
 
     @classmethod
@@ -36,7 +36,7 @@ class AgencyCohorts(ProductCohorts):
             # Filter to this product's diagonal segment
             prod_df = self.journey[
                 (self.journey['segment'] == seg) &
-                (self.journey['cohort_month'] >= pd.Period('2024-01', 'M'))
+                (self.journey['cohort_month'] >= pd.Period(self.start_month, 'M'))
                 ]
 
             # Which agencies have enough data?

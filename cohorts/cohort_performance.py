@@ -203,7 +203,8 @@ class WeeklyCohorts(YearCohorts):
         sw_q['conversion_rate'] = sw_q['converted'] / sw_q['total'] * 100
 
         fig, axes = plt.subplots(2, 2, figsize=(18, 11))
-        fig.suptitle('Quarterly Comparison: 2025 Q1–Q4 vs 2026 Q1', fontsize=14, fontweight='bold')
+        q_range = f"{self.quarters_to_plot[0]}–{self.quarters_to_plot[-2]} vs {self.quarters_to_plot[-1]}"
+        fig.suptitle(f'Quarterly Comparison: {q_range}', fontsize=14, fontweight='bold')
 
         partial_q = self.quarters_to_plot[-1]
         partial_idx = len(self.quarters_to_plot) - 1
